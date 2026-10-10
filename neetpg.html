@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medical CBT Examination</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f2f5f9;
+  color: #202b3c;
+}
+
+header {
+  background: #153e75;
+  color: white;
+  padding: 16px;
+  text-align: center;
+}
+
+header h2 { margin: 0 0 8px; }
+
+.container {
+  max-width: 1100px;
+  margin: 18px auto;
+  padding: 12px;
+}
+
+.card {
+  background: white;
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 8px #00000010;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-weight: bold;
+}
+
+#timer { color: #c62828; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: 15px;
+}
+
+.question {
+  font-size: 19px;
+  font-weight: bold;
+  line-height: 1.6;
+  margin: 18px 0;
+}
+
+.option {
+  display: block;
+  border: 1px solid #d6dce5;
+  padding: 13px;
+  border-radius: 8px;
+  margin: 10px 0;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.option:has(input:checked) {
+  background: #e7f0ff;
+  border-color: #2864c5;
+}
+
+.option input {
+  margin-right: 10px;
+}
+
+button, .upload-label {
+  border: none;
+  padding: 11px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  background: #2864c5;
+  color: white;
+  margin: 4px 2px;
+}
+
+button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.secondary { background: #64748b; }
+.review { background: #e5a000; color: #222; }
+.danger { background: #c62828; }
+.success { background: #16804a; }
+
+.palette {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.qnum {
+  min-width: 0;
+  padding: 10px 2px;
+  background: #e4e8ef;
+  color: #202b3c;
+}
+
+.qnum.answered { background: #16804a; color: white; }
+.qnum.marked { background: #e5a000; color: #222; }
+.qnum.current { outline: 3px solid #2864c5; }
+
+.legend {
+  font-size: 13px;
+  line-height: 1.9;
+  margin-top: 12px;
+}
+
+.small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hidden { display: none !important; }
+
+#result h2 { color: #153e75; }
+
+.result-row {
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.correct-text { color: #16804a; }
+.wrong-text { color: #c62828; }
+
+@media (max-width: 700px) {
+  .layout { grid-template-columns: 1fr; }
+  .question { font-size: 17px; }
+  .card { padding: 13px; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>Medical CBT Examination</h2>
+  <div>Computer-Based Mock Test</div>
+</header>
+
+<div class="container">
+
+  <section id="setup" class="card">
+    <h3>Examination Setup</h3>
+
+    <label>
+      Examination name:
+      <input id="examName" value="NEET PG Mock Test"
+        style="padding:10px;width:100%;margin-top:7px">
+    </label>
+
+    <p>
+      <label>Duration in minutes:
+        <input id="duration" type="number" min="1" max="600"
+          value="30" style="padding:8px;width:100%">
+      </label>
+    </p>
+
+    <p>
+      <label>Marks for each correct answer:
+        <input id="positive" type="number" min="0" max="100"
+          step="0.25" value="4" style="padding:8px;width:100%">
+      </label>
+    </p>
+
+    <p>
+      <label>Negative marks for each wrong answer:
+        <input id="negative" type="number" min="0" max="100"
+          step="0.25" value="1" style="padding:8px;width:100%">
+      </label>
+    </p>
+
+    <p>
+      <label>
+        <input id="shuffle" type="checkbox">
+        Randomize question order
+      </label>
+    </p>
+
+    <p>
+      <label class="upload-label" for="jsonFile">
+        Import MCQs (JSON)
+      </label>
+      <input id="jsonFile" type="file" accept=".json,application/json"
+        style="display:none">
+    </p>
+
+    <p id="fileStatus" class="small">
+      Demo questions are loaded. Import your own JSON file to replace them.
+    </p>
+
+    <p class="small">
+      JSON format: an array of questions, each containing
+      "question", "options", "answer" and optionally "explanation".
+      The answer is the zero-based option index: 0=A, 1=B, 2=C, 3=D.
+    </p>
+
+    <button onclick="startExam()">Start Examination</button>
+  </section>
+
+  <section id="exam" class="hidden">
+    <div class="card topbar">
+      <span id="examTitle">Mock Test</span>
+      <span id="progress">Question 1</span>
+      <span id="timer">30:00</span>
+    </div>
+
+    <div class="layout">
+      <main class="card">
+        <div id="questionNumber"></div>
+        <div id="questionText" class="question"></div>
+        <div id="options"></div>
+
+        <div style="margin-top:20px">
+          <button class="secondary" id="previousBtn"
+            onclick="move(-1)">Previous</button>
+
+          <button class="review" id="reviewBtn"
+            onclick="toggleReview()">Mark for Review</button>
+
+          <button id="nextBtn" onclick="move(1)">Save & Next</button>
+        </div>
+
+        <p class="small">
+          Select one option. Your answers are saved automatically
+          as you navigate between questions.
+        </p>
+      </main>
+
+      <aside class="card">
+        <h3>Question Palette</h3>
+        <div id="palette" class="palette"></div>
+
+        <div class="legend">
+          🟩 Answered<br>
+          🟨 Marked for review<br>
+          ⬜ Not answered<br>
+          🔵 Current question
+        </div>
+
+        <hr style="border:0;border-top:1px solid #ddd;margin:16px 0">
+
+        <p id="answeredCount"></p>
+        <p id="unansweredCount"></p>
+        <p id="markedCount"></p>
+
+        <button class="danger" onclick="confirmSubmit()">
+          Submit Examination
+        </button>
+      </aside>
+    </div>
+  </section>
+
+  <section id="result" class="card hidden">
+    <h2>Examination Result</h2>
+    <div id="resultSummary"></div>
+
+    <h3>Answer Review</h3>
+    <div id="reviewResults"></div>
+
+    <button onclick="restart()">Take Another Test</button>
+    <button class="secondary" onclick="window.print()">
+      Print Result
+    </button>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+
+// Demo questions. Replace these by importing your own JSON file.
+const demoQuestions = [
+  {
+    question: "Which immunoglobulin crosses the placenta?",
+    options: ["IgA", "IgM", "IgG", "IgE"],
+    answer: 2,
+    explanation: "IgG crosses the placenta through FcRn-mediated transport."
+  },
+  {
+    question: "Which cell is primarily responsible for antibody production?",
+    options: ["T lymphocyte", "Plasma cell", "NK cell", "Neutrophil"],
+    answer: 1,
+    explanation: "Plasma cells are differentiated B lymphocytes that secrete antibodies."
+  },
+  {
+    question: "Which organelle is primarily involved in intracellular protein degradation via ubiquitin?",
+    options: ["Lysosome", "Golgi apparatus", "Proteasome", "Nucleolus"],
+    answer: 2,
+    explanation: "The ubiquitin-proteasome system degrades many tagged intracellular proteins."
+  },
+  {
+    question: "Which vitamin deficiency causes megaloblastic anemia?",
+    options: ["Vitamin C", "Vitamin B12", "Vitamin K", "Vitamin D"],
+    answer: 1,
+    explanation: "Vitamin B12 or folate deficiency can cause megaloblastic anemia."
+  },
+  {
+    question: "Which type of hypersensitivity is mediated by IgE?",
+    options: ["Type I", "Type II", "Type III", "Type IV"],
+    answer: 0,
+    explanation: "Type I hypersensitivity involves IgE and mast cell activation."
+  }
+];
+
+let questions = demoQuestions.slice();
+let answers = [];
+let marked = [];
+let current = 0;
+let remaining = 0;
+let timerId = null;
+let examStarted = false;
+let submitted = false;
+let examSettings = {};
+let examTitle = "NEET PG Mock Test";
+
+const $ = id => document.getElementById(id);
+
+$("jsonFile").addEventListener("change", async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error("The JSON must contain a non-empty array.");
+    }
+
+    const cleaned = data.map((q, i) => {
+      if (
+        typeof q.question !== "string" ||
+        !Array.isArray(q.options) ||
+        q.options.length < 2 ||
+        q.options.some(o => typeof o !== "string") ||
+        !Number.isInteger(q.answer) ||
+        q.answer < 0 ||
+        q.answer >= q.options.length
+      ) {
+        throw new Error("Invalid question or answer at item " + (i + 1));
+      }
+
+      return {
+        question: q.question,
+        options: q.options,
+        answer: q.answer,
+        explanation: typeof q.explanation === "string"
+          ? q.explanation : ""
+      };
+    });
+
+    if (examStarted) {
+      throw new Error("Import questions before starting an exam.");
+    }
+
+    questions = cleaned;
+    $("fileStatus").textContent =
+      "Successfully loaded " + questions.length + " questions.";
+  } catch (error) {
+    $("fileStatus").textContent =
+      "Import failed: " + error.message;
+  }
+
+  event.target.value = "";
+});
+
+function startExam() {
+  if (examStarted && !submitted) return;
+
+  const duration = Number($("duration").value);
+  const positive = Number($("positive").value);
+  const negative = Number($("negative").value);
+
+  if (!Number.isFinite(duration) || duration < 1 || duration > 600 ||
+      !Number.isFinite(positive) || positive < 0 ||
+      !Number.isFinite(negative) || negative < 0) {
+    alert("Please enter valid examination settings.");
+    return;
+  }
+
+  examSettings = { positive, negative };
+  examTitle = $("examName").value.trim() || "CBT Examination";
+
+  questions = questions.slice();
+
+  if ($("shuffle").checked) {
+    for (let i = questions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+  }
+
+  answers = Array(questions.length).fill(null);
+  marked = Array(questions.length).fill(false);
+  current = 0;
+  remaining = Math.round(duration * 60);
+  examStarted = true;
+  submitted = false;
+
+  $("setup").classList.add("hidden");
+  $("result").classList.add("hidden");
+  $("exam").classList.remove("hidden");
+  $("examTitle").textContent = examTitle;
+
+  render();
+  updateTimer();
+
+  clearInterval(timerId);
+  timerId = setInterval(() => {
+    remaining--;
+    updateTimer();
+
+    if (remaining <= 0) {
+      clearInterval(timerId);
+      submitExam(true);
+    }
+  }, 1000);
+}
+
+function updateTimer() {
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
+
+  $("timer").textContent =
+    String(minutes).padStart(2, "0") + ":" +
+    String(seconds).padStart(2, "0");
+
+  $("timer").style.color = remaining <= 60 ? "#ff2020" : "#c62828";
+}
+
+function render() {
+  if (submitted) return;
+
+  const q = questions[current];
+
+  $("questionNumber").textContent =
+    "Question " + (current + 1) + " of " + questions.length;
+
+  $("progress").textContent =
+    (current + 1) + " / " + questions.length;
+
+  $("questionText").textContent = q.question;
+  $("options").replaceChildren();
+
+  q.options.forEach((option, index) => {
+    const label = document.createElement("label");
+    label.className = "option";
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "answer";
+    radio.value = index;
+    radio.checked = answers[current] === index;
+    radio.addEventListener("change", () => {
+      answers[current] = index;
+      renderPalette();
+      updateCounts();
+    });
+
+    label.append(radio, document.createTextNode(
+      String.fromCharCode(65 + index) + ". " + option
+    ));
+
+    $("options").appendChild(label);
+  });
+
+  $("previousBtn").disabled = current === 0;
+  $("nextBtn").textContent =
+    current === questions.length - 1 ? "Save Answer" : "Save & Next";
+
+  $("reviewBtn").textContent =
+    marked[current] ? "Unmark Review" : "Mark for Review";
+
+  renderPalette();
+  updateCounts();
+}
+
+function move(direction) {
+  const target = current + direction;
+
+  if (target < 0 || target >= questions.length) return;
+
+  current = target;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function toggleReview() {
+  marked[current] = !marked[current];
+  render();
+}
+
+function renderPalette() {
+  $("palette").replaceChildren();
+
+  questions.forEach((q, index) => {
+    const button = document.createElement("button");
+    button.className = "qnum";
+
+    if (answers[index] !== null) button.classList.add("answered");
+    if (marked[index]) button.classList.add("marked");
+    if (index === current) button.classList.add("current");
+
+    button.textContent = index + 1;
+    button.setAttribute("aria-label",
+      "Go to question " + (index + 1));
+
+    button.addEventListener("click", () => {
+      current = index;
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    $("palette").appendChild(button);
+  });
+}
+
+function updateCounts() {
+  const answered = answers.filter(a => a !== null).length;
+  const markedCount = marked.filter(Boolean).length;
+
+  $("answeredCount").textContent = "Answered: " + answered;
+  $("unansweredCount").textContent =
+    "Unanswered: " + (questions.length - answered);
+  $("markedCount").textContent = "Marked: " + markedCount;
+}
+
+function confirmSubmit() {
+  const unanswered = answers.filter(a => a === null).length;
+
+  const message =
+    "Submit your examination?\n\n" +
+    "Unanswered questions: " + unanswered +
+    "\nYou cannot resume this attempt after submission.";
+
+  if (confirm(message)) submitExam(false);
+}
+
+function submitExam(autoSubmitted) {
+  if (submitted) return;
+
+  submitted = true;
+  examStarted = false;
+  clearInterval(timerId);
+
+  let correct = 0;
+  let wrong = 0;
+  let skipped = 0;
+
+  questions.forEach((q, i) => {
+    if (answers[i] === null) skipped++;
+    else if (answers[i] === q.answer) correct++;
+    else wrong++;
+  });
+
+  const score =
+    correct * examSettings.positive -
+    wrong * examSettings.negative;
+
+  const maxMarks = questions.length * examSettings.positive;
+  const accuracy = correct + wrong
+    ? (correct / (correct + wrong) * 100).toFixed(2)
+    : "0.00";
+
+  $("exam").classList.add("hidden");
+  $("result").classList.remove("hidden");
+
+  $("resultSummary").replaceChildren();
+
+  const summary = [
+    ["Total questions", questions.length],
+    ["Correct answers", correct],
+    ["Wrong answers", wrong],
+    ["Unanswered", skipped],
+    ["Final score", score.toFixed(2) + " / " + maxMarks.toFixed(2)],
+    ["Accuracy", accuracy + "%"],
+    ["Status", autoSubmitted ? "Time expired" : "Submitted"]
+  ];
+
+  summary.forEach(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "result-row";
+    const strong = document.createElement("strong");
+    strong.textContent = label + ": ";
+    row.append(strong, document.createTextNode(String(value)));
+    $("resultSummary").appendChild(row);
+  });
+
+  $("reviewResults").replaceChildren();
+
+  questions.forEach((q, i) => {
+    const block = document.createElement("div");
+    block.className = "result-row";
+
+    const title = document.createElement("h4");
+    title.textContent = (i + 1) + ". " + q.question;
+    block.appendChild(title);
+
+    const yourAnswer = document.createElement("p");
+    if (answers[i] === null) {
+      yourAnswer.textContent = "Your answer: Not answered";
+    } else {
+      yourAnswer.textContent = "Your answer: " +
+        String.fromCharCode(65 + answers[i]) + ". " +
+        q.options[answers[i]];
+    }
+
+    yourAnswer.className =
+      answers[i] === null ? "" :
+      answers[i] === q.answer ? "correct-text" : "wrong-text";
+
+    block.appendChild(yourAnswer);
+
+    const correctAnswer = document.createElement("p");
+    correctAnswer.className = "correct-text";
+    correctAnswer.textContent = "Correct answer: " +
+      String.fromCharCode(65 + q.answer) + ". " +
+      q.options[q.answer];
+    block.appendChild(correctAnswer);
+
+    if (q.explanation) {
+      const explanation = document.createElement("p");
+      explanation.textContent = "Explanation: " + q.explanation;
+      block.appendChild(explanation);
+    }
+
+    $("reviewResults").appendChild(block);
+  });
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function restart() {
+  clearInterval(timerId);
+  submitted = false;
+  examStarted = false;
+
+  $("result").classList.add("hidden");
+  $("exam").classList.add("hidden");
+  $("setup").classList.remove("hidden");
+}
+
+// Import data and settings before starting the exam.
+</script>
+
+</body>
+</html>
